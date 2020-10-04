@@ -1,0 +1,41 @@
+query RepoView($owner: String!, $name: String!, $nnodes: Int!, $pullcursor: String) {
+  repository(owner: $owner, name: $name) {
+    nameWithOwner
+    pullRequests(first: $nnodes, after: $pullcursor) {
+      edges {
+        cursor
+        node {
+          participants(first: $nnodes) {
+            pageInfo {
+              endCursor
+              hasNextPage
+            }
+            edges {
+              cursor
+              node {
+                company
+                location
+                login
+                organizations(first: $nnodes) {
+                  nodes {
+                    login
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+  rateLimit {
+    remaining
+    resetAt
+    used
+  }
+}
+
