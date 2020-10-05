@@ -42,4 +42,8 @@ impl QueryClient {
             .json()
             .await?)
     }
+
+    fn backoff(&self) {
+        unimplemented!();
+    }
 }
