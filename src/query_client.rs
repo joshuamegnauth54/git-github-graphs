@@ -2,7 +2,11 @@
 use graphql_client::{GraphQLQuery, Response};
 use reqwest::{Client, Result};
 use serde::Serialize;
+use std::{thread::sleep, time::Duration};
 
+use crate::query_structs::backoff_timer::BackoffTimer;
+
+const DEFAULT_TIMEOUT: u64 = 10;
 const GITHUBAPI: &str = "https://api.github.com/graphql";
 // User agents are always required for the GitHub API.
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), " (", env!("CARGO_PKG_VERSION"), ")");
@@ -28,11 +32,11 @@ impl QueryClient {
     pub async fn request<Q, R>(&self, query: &Q) -> Result<Response<R::ResponseData>>
     where
         Q: Serialize,
-        R: GraphQLQuery + Send + Sync,
+        R: BackoffTimer<R> + GraphQLQuery + Send + Sync,
     {
-        // The block below simply sends a POST to the GitHub GraphQL API site with the provided
-        // token and query.
-        Ok(self
+        // The block below queries the GitHub API using the associated token and query. I'm saving
+        // the result into a variable to query R::backoff().
+        let result: Result<Response<R::ResponseData>> = self
             .client
             .post(GITHUBAPI)
             .bearer_auth(&self.token)
@@ -40,10 +44,25 @@ impl QueryClient {
             .send()
             .await?
             .json()
-            .await?)
+            .await;
+
+        QueryClient::backoff::<R>(&result).await;
+        result
     }
 
-    fn backoff(&self) {
-        unimplemented!();
+    // The backoff function defers to R::backoff for the timer. If the implementer does not use the
+    // rate limit info but returns some other amount of time we still defer to their wisdom.
+    // Likewise, if the implementer returns None we simply use a default.
+    async fn backoff<R>(response: &Result<Response<R::ResponseData>>)
+    where
+        R: BackoffTimer<R> + GraphQLQuery + Send + Sync,
+    {
+        match response {
+            Ok(ref repdata) if repdata.data.is_some() => sleep(
+                R::backoff(&repdata.data.as_ref().unwrap())
+                    .unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT)),
+            ),
+            _ => sleep(Duration::from_secs(DEFAULT_TIMEOUT)),
+        }
     }
 }

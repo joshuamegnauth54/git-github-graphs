@@ -5,6 +5,12 @@ query RepoView($owner: String!, $name: String!, $nnodes: Int!, $pullcursor: Stri
       edges {
         cursor
         node {
+          author {
+            __typename
+            login
+          }
+          authorAssociation
+          createdAt
           participants(first: $nnodes) {
             pageInfo {
               endCursor
