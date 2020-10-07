@@ -21,6 +21,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("Beginning scrape.");
     let response = query_to_end(&client, &rustlang_req).await?;
     //println!("{:?}", response);
-    let fuck = RepoViewNode::parse_nodes(&response);
     Ok(())
 }
