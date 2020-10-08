@@ -20,6 +20,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = QueryClient::new()?;
     info!("Beginning scrape.");
     let response = query_to_end(&client, &rustlang_req).await?;
-    //println!("{:?}", response);
+    println!("{:#?}", response);
+
+    //nodes_test = parse_nodes(&response);
+    //println!("{:?}", nodes_test);
+
     Ok(())
 }

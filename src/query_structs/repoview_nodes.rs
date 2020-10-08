@@ -68,18 +68,22 @@ impl RepoViewNode {
                                                         location: finally_node
                                                             .location
                                                             .as_ref()
-                                                            .unwrap_or_default()
+                                                            .unwrap_or(&("".to_owned()))
                                                             .clone(),
                                                         company: finally_node
                                                             .company
-                                                            .unwrap_or_default()
+                                                            .as_ref()
+                                                            .unwrap_or(&"".to_owned())
                                                             .clone(),
                                                         organizations: finally_node
                                                             .organizations
                                                             .nodes
+                                                            .as_ref()
                                                             .unwrap()
                                                             .iter()
-                                                            .map(|junk| junk.unwrap().login)
+                                                            .map(|junk| {
+                                                                junk.as_ref().unwrap().login.clone()
+                                                            })
                                                             .collect(),
                                                     })
                                                 }
