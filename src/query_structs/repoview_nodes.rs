@@ -14,91 +14,121 @@ pub struct RepoViewNode {
 }
 
 impl RepoViewNode {
-    // Make generic...eventually.
-    // Maybe take an Iterator?
+    // Pulls out each organization from the array of organizations listed by the user.
+    fn organizations_to_vec(
+        orgs: &repo_view::RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdgesNodeOrganizations,
+    ) -> Option<Vec<String>> {
+        orgs.nodes.as_ref().and_then(|nodes_iter| {
+            Some(
+                nodes_iter
+                    .iter()
+                    .map(|node_org| {
+                        node_org
+                            .as_ref()
+                            .and_then(|org| Some(org.login.clone()))
+                            .unwrap_or_else(|| String::from("NA"))
+                    })
+                    .collect(),
+            )
+        })
+    }
+
+    // My attempt to break up the rightward drift in destructuring and parsing the JSON output from
+    // my GraphQL query. The following function builds RepoViewNodes from
+    // RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdges. Sorry, I just wanted to type that
+    // again.
+    // Participants refers to posters on the specific pull request. So, we take in repository and
+    // DateTime String slices as those don't change per poster.
+    fn participants_to_nodes(
+        participants: &Vec<
+            Option<repo_view::RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdges>,
+        >,
+        repo: &str,
+        created_at: &str,
+    ) -> Option<Vec<RepoViewNode>> {
+        participants
+            .iter()
+            .map(|part_edges_opt| {
+                // Individual ParticipantsEdges
+                part_edges_opt.as_ref().and_then(|part_edges| {
+                    // ParticipantsEdgesNode
+                    part_edges.node.as_ref().and_then(|user| {
+                        Some(RepoViewNode {
+                            repository: repo.to_owned(),
+                            author: user.login.to_owned(),
+                            date_created: created_at.to_owned(),
+                            // Users don't have to specify a location/company/organizations so they
+                            // must be handled reasonably.
+                            location: user
+                                .location
+                                .as_ref()
+                                .map_or_else(|| String::from("NA"), |location| location.clone()),
+                            company: user
+                                .company
+                                .as_ref()
+                                .map_or_else(|| String::from("NA"), |company| company.clone()),
+                            organizations: RepoViewNode::organizations_to_vec(&user.organizations)
+                                .unwrap_or_else(|| Vec::new()),
+                        }) //End of RepoViewNode construction
+                    }) // End of ParticipantsEdgesNode
+                }) // End of individual ParticipantsEdges
+            })
+            .collect() // End of ParticipantsEdges
+    }
+
+    fn pull_reqs_vec(
+        pr_edges_vec: &Vec<Option<repo_view::RepoViewRepositoryPullRequestsEdges>>,
+        repo: &str,
+    ) -> Vec<RepoViewNode> {
+        // RepoViewRepositoryPullRequestsEdges iterator
+        // (As well as the actual Edges)
+        pr_edges_vec
+            .iter()
+            .map(|pr_edge_option| {
+                // RepoViewRepositoryPullRequestsEdges
+                pr_edge_option.as_ref().and_then(|pr_edges| {
+                    // RepoViewRepositoryPullRequestsEdgesNode
+                    pr_edges.node.as_ref().and_then(|pr_edges_node| {
+                        // ParticipantsEdges iter
+                        pr_edges_node
+                            .participants
+                            .edges
+                            .as_ref()
+                            .and_then(|part_edges_iter| {
+                                Some(RepoViewNode::participants_to_nodes(
+                                    &part_edges_iter,
+                                    repo,
+                                    &pr_edges_node.created_at,
+                                ))
+                            }) // End of ParticipantsEdges iter
+                    }) // End of RepoViewRepositoryPullRequestsEdgesNode
+                }) // End of RepoViewRepositoryPullRequestsEdges
+            }) // End of RepoViewRepositoryPullRequestsEdges iterator and the map
+            // We're left with an Option<Option<Vec<RepoViewNode>>> for EACH pull request which is
+            // very messy. A more erudite programmer may handle all of this better, but I've found
+            // that using a flat_map to flatten the structure then flattening again followed by
+            // getting the values (i.e. not references) of each RepoViewNedo via into_iter then
+            // flattening that iterator so collect may pick up everything from each Vec.
+            .flat_map(|nested_option| nested_option.flatten().into_iter().flatten())
+            .collect()
+    }
+
     pub fn parse_nodes(data: &Vec<repo_view::ResponseData>) -> Vec<RepoViewNode> {
         let mut parsed: Vec<RepoViewNode> = Vec::new();
 
-        /*for unparsed in data.iter() {
-            match unparsed.repository {
-                Some(ref repo) => repo.pull_requests.edges.as_ref().and_then(|pr_edges| {
-                    pr_edges.iter().map(|pr_edge| {
-                        pr_edge.unwrap().node.and_then(|pr_node| {
-                            pr_node.participants.edges.iter().for_each(|part_edge| {
-                                part_edge.node.and_then(|user| {
-                                    parsed.push(RepoViewNode {
-                                        repository: repo.name_with_owner.clone(),
-                                        author: user.login.clone(),
-                                        date_created: "".to_owned(),
-                                        location: user.location.unwrap_or_default().clone(),
-                                        company: user.company.unwrap_or_default().clone(),
-                                        organizations: user
-                                            .organizations
-                                            .nodes
-                                            .unwrap_or_default()
-                                            .clone(),
-                                    })
-                                })
-                            })
-                        })
-                    })
-                }),
-                None => warn!("Empty data found in parsing. Data: {:#?}", unparsed),
-            }
-        }*/
-
-        // Let's be honest. Query languages are the worst.
-
-        // This is the ugliest code.
         for unparsed in data.iter() {
             match unparsed.repository {
+                // RepoViewRepository
                 Some(ref repo) => {
-                    if let Some(ref pr_edges) = repo.pull_requests.edges {
-                        for pr_edge_thing in pr_edges {
-                            if let Some(pr_edge_thing_edge) = pr_edge_thing {
-                                if let Some(ref pr_edge_node) = pr_edge_thing_edge.node {
-                                    if let Some(ref part_edges) = pr_edge_node.participants.edges {
-                                        for gimme_node_damn in part_edges {
-                                            if let Some(what_is_this) = gimme_node_damn {
-                                                if let Some(ref finally_node) = what_is_this.node {
-                                                    parsed.push(RepoViewNode {
-                                                        repository: repo.name_with_owner.clone(),
-                                                        author: finally_node.login.clone(),
-                                                        date_created: "".to_owned(),
-                                                        location: finally_node
-                                                            .location
-                                                            .as_ref()
-                                                            .unwrap_or(&("".to_owned()))
-                                                            .clone(),
-                                                        company: finally_node
-                                                            .company
-                                                            .as_ref()
-                                                            .unwrap_or(&"".to_owned())
-                                                            .clone(),
-                                                        organizations: finally_node
-                                                            .organizations
-                                                            .nodes
-                                                            .as_ref()
-                                                            .unwrap()
-                                                            .iter()
-                                                            .map(|junk| {
-                                                                junk.as_ref().unwrap().login.clone()
-                                                            })
-                                                            .collect(),
-                                                    })
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                None => warn!("Empty data found in parsing. Data: {:#?}", unparsed),
+                    let reponodes: Option<Vec<RepoViewNode>> =
+                    // RepoViewRepositoryPullRequests (and Option<[...]Edges>)
+                    repo.pull_requests.edges.as_ref().and_then(|pr_edges_vec| {
+                        Some(RepoViewNode::pull_reqs_vec(&pr_edges_vec, &repo.name_with_owner))
+                    }); // End of RepoViewRepositoryPullRequests
+                } // End of Some(ref repo)
+                None => warn!("Empty data found while parsing. Data: {:#?}", unparsed),
             }
         }
-
         parsed
     }
 }

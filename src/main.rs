@@ -22,8 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let response = query_to_end(&client, &rustlang_req).await?;
     println!("{:#?}", response);
 
-    //nodes_test = parse_nodes(&response);
-    //println!("{:?}", nodes_test);
+    let nodes_test = RepoViewNode::parse_nodes(&response);
+    println!("{:?}", nodes_test);
 
     Ok(())
 }
