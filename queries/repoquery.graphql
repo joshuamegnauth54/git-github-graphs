@@ -11,6 +11,7 @@ query RepoView($owner: String!, $name: String!, $nnodes: Int!, $pullcursor: Stri
           }
           authorAssociation
           createdAt
+          title
           participants(first: $nnodes) {
             pageInfo {
               endCursor

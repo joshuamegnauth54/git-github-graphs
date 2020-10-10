@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("{:#?}", response);
 
     let nodes_test = RepoViewNode::parse_nodes(&response);
-    println!("{:?}", nodes_test);
+    println!("{:#?}", nodes_test);
 
     Ok(())
 }

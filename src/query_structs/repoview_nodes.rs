@@ -8,6 +8,7 @@ pub struct RepoViewNode {
     pub repository: String,
     pub author: String,
     pub date_created: String,
+    pub pull_req_title: String,
     pub location: String,
     pub company: String,
     pub organizations: Vec<String>,
@@ -45,6 +46,7 @@ impl RepoViewNode {
         >,
         repo: &str,
         created_at: &str,
+        title: &str,
     ) -> Option<Vec<RepoViewNode>> {
         participants
             .iter()
@@ -52,11 +54,13 @@ impl RepoViewNode {
                 // Individual ParticipantsEdges
                 part_edges_opt.as_ref().and_then(|part_edges| {
                     // ParticipantsEdgesNode
+                    // Constructs individual RepoViewNodes that are collected into a Vector.
                     part_edges.node.as_ref().and_then(|user| {
                         Some(RepoViewNode {
                             repository: repo.to_owned(),
                             author: user.login.to_owned(),
                             date_created: created_at.to_owned(),
+                            pull_req_title: title.to_owned(),
                             // Users don't have to specify a location/company/organizations so they
                             // must be handled reasonably.
                             location: user
@@ -76,6 +80,8 @@ impl RepoViewNode {
             .collect() // End of ParticipantsEdges
     }
 
+    // Traverses the pull requests to build Vectors of RepoViewNodes. The Vectors are constructed
+    // from Vectors of Vectors of RepoViewNodes.
     fn pull_reqs_vec(
         pr_edges_vec: &Vec<Option<repo_view::RepoViewRepositoryPullRequestsEdges>>,
         repo: &str,
@@ -99,6 +105,7 @@ impl RepoViewNode {
                                     &part_edges_iter,
                                     repo,
                                     &pr_edges_node.created_at,
+                                    &pr_edges_node.title,
                                 ))
                             }) // End of ParticipantsEdges iter
                     }) // End of RepoViewRepositoryPullRequestsEdgesNode
@@ -120,11 +127,14 @@ impl RepoViewNode {
             match unparsed.repository {
                 // RepoViewRepository
                 Some(ref repo) => {
-                    let reponodes: Option<Vec<RepoViewNode>> =
+                    let maybe_reponodes: Option<Vec<RepoViewNode>> =
                     // RepoViewRepositoryPullRequests (and Option<[...]Edges>)
                     repo.pull_requests.edges.as_ref().and_then(|pr_edges_vec| {
                         Some(RepoViewNode::pull_reqs_vec(&pr_edges_vec, &repo.name_with_owner))
                     }); // End of RepoViewRepositoryPullRequests
+                    if let Some(reponodes) = maybe_reponodes {
+                        parsed.extend(reponodes);
+                    }
                 } // End of Some(ref repo)
                 None => warn!("Empty data found while parsing. Data: {:#?}", unparsed),
             }
