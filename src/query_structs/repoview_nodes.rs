@@ -1,5 +1,6 @@
-#[warn(clippy::all)]
 use super::repoview::*;
+#[warn(clippy::all)]
+//use crate::error::{Error, Result};
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -114,7 +115,7 @@ impl RepoViewNode {
             // We're left with an Option<Option<Vec<RepoViewNode>>> for EACH pull request which is
             // very messy. A more erudite programmer may handle all of this better, but I've found
             // that using a flat_map to flatten the structure then flattening again followed by
-            // getting the values (i.e. not references) of each RepoViewNedo via into_iter then
+            // getting the values (i.e. not references) of each RepoViewNode via into_iter then
             // flattening that iterator so collect may pick up everything from each Vec.
             .flat_map(|nested_option| nested_option.flatten().into_iter().flatten())
             .collect()

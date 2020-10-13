@@ -11,3 +11,6 @@ Cargo.lock
 
 # GitHub's schema file. No reason to upload a copy.
 /queries/ghschema.graphql
+
+# Scraped data
+/output/

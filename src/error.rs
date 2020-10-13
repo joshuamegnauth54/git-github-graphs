@@ -1,8 +1,12 @@
-use super::errorkind::ErrorKind;
+pub use super::errorkind::ErrorKind;
+use serde_json::Error as JsonError;
 #[warn(clippy::all)]
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    io::Error as IoError,
+};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Error {
     context: String,
     errorkind: ErrorKind,
@@ -20,15 +24,40 @@ impl Error {
             errorkind,
         }
     }
+
+    pub fn context(&self) -> &str {
+        &self.context
+    }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.errorkind {
             ErrorKind::BadArgs => write!(f, "Called with bad arguments: {}", self.context),
-            //_ => write!(f, "Unreachable error? Context: {}", self.context),
+            ErrorKind::EmptyData => write!(f, "Unexpectedly empty data: {}", self.context),
+            ErrorKind::Io(io) => write!(f, "IO Error: {}. Context: {}", io, self.context),
+            ErrorKind::Json(json) => write!(
+                f,
+                "Serde JSON error: {:?}; Context: {context}",
+                json,
+                context = self.context()
+            ),
         }
     }
 }
 
 impl std::error::Error for Error {}
+
+impl From<JsonError> for Error {
+    // The classify() function would provide us with a reasonable default for context if ? passes
+    // the error up.
+    fn from(json: JsonError) -> Self {
+        Error::new(format!("{:?}", json.classify()), ErrorKind::Json(json))
+    }
+}
+
+impl From<IoError> for Error {
+    fn from(io: IoError) -> Self {
+        Error::new("Empty context", ErrorKind::Io(io))
+    }
+}

@@ -1,8 +1,12 @@
 #[warn(clippy::all)]
 use futures::future::select_all;
 use graphql_client::QueryBody;
-use log::info;
-use std::env::args;
+use log::{error, info};
+use std::{
+    env::args,
+    fs::{create_dir_all, File},
+    path::Path,
+};
 
 mod error;
 mod errorkind;
@@ -11,7 +15,7 @@ mod query_structs;
 use error::{Error, Result};
 use errorkind::ErrorKind;
 use query_client::QueryClient;
-use query_structs::{repoview::*, repoview_nodes::RepoViewNode};
+use query_structs::{repoview::*, repoview_nodes::RepoViewNode, write_nodes::write_nodes};
 
 // I set NUM_NODES to a reasonable default rather than taking arguments. The API throws an error if
 // the caller may possibly request more than 500,000 nodes at a time. I would either have to
@@ -61,6 +65,55 @@ fn make_requests() -> Result<Vec<QueryBody<repo_view::Variables>>> {
         .collect())
 }
 
+fn write_output(results: &Vec<Vec<RepoViewNode>>) {
+    // Open a set of output files with the paths output/owner/repo.json.
+    // We'll attempt to write the data regardless of any errors rather than simply failing.
+    let files: Vec<Result<File>> = results
+        .iter()
+        .map(|nodes| {
+            nodes
+                .iter()
+                // Peek to look at the first node to get the repository name.
+                .peekable()
+                .peek()
+                // Report if the Vector is empty then continue.
+                .ok_or_else(|| {
+                    Error::new(
+                        "Empty input data while writing output JSON.",
+                        ErrorKind::EmptyData,
+                    )
+                })
+                .and_then(|node| {
+                    // Paths are a zero cost conversion so we need a variable.
+                    let temp_path = format!("output/{}.json", &node.repository);
+                    let repo_path = Path::new(&temp_path);
+                    // Create the full directory path if required or return an error with the
+                    // failed path.
+                    create_dir_all(&repo_path.parent().ok_or_else(|| {
+                        // Manually convert NoneError into an Error.
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            repo_path.to_str().unwrap_or_else(|| "").to_owned(),
+                        )
+                    })?)?;
+                    Ok(File::create(&repo_path)?)
+                })
+        })
+        .collect();
+
+    // I'm not sure what else to do beyond reporting the errors.
+    for repo_pair in files.iter().zip(results.iter()) {
+        match repo_pair.0 {
+            Ok(file) => {
+                if let Err(e) = write_nodes(file, &repo_pair.1) {
+                    error!("{}", e)
+                }
+            }
+            Err(e) => error!("{}", e),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _log =
@@ -71,10 +124,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sy
     info!("Beginning scrape.");
     // Test
     let response = query_to_end(&client, requests.iter().next().unwrap()).await?;
-    println!("{:#?}", response);
+    //println!("{:#?}", response);
 
     let nodes_test = RepoViewNode::parse_nodes(&response);
     println!("{:#?}", nodes_test);
+    info!("Writing files.");
+    write_output(&vec![nodes_test]);
 
     Ok(())
 }
