@@ -1,10 +1,13 @@
 #[warn(clippy::all)]
 use graphql_client::{GraphQLQuery, Response};
-use reqwest::{Client, Result};
+use reqwest::Client;
 use serde::Serialize;
 use std::{thread::sleep, time::Duration};
 
-use crate::query_structs::backoff_timer::BackoffTimer;
+use crate::{
+    error::{Error, ErrorKind, Result},
+    query_structs::backoff_timer::BackoffTimer,
+};
 
 const DEFAULT_TIMEOUT: u64 = 10;
 const GITHUBAPI: &str = "https://api.github.com/graphql";
@@ -19,13 +22,14 @@ pub struct QueryClient {
 }
 
 impl QueryClient {
-    pub fn new() -> std::result::Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new() -> Result<Self> {
         Ok(QueryClient {
             client: Client::builder()
                 .user_agent(USER_AGENT)
                 .gzip(true)
                 .build()?,
-            token: std::env::var(TOKEN_ENV)?,
+            token: std::env::var(TOKEN_ENV)
+                .map_err(|_e| Error::new("Creating reqwest::Client.", ErrorKind::NoToken))?,
         })
     }
 
@@ -44,7 +48,13 @@ impl QueryClient {
             .send()
             .await?
             .json()
-            .await;
+            .await
+            .map_err(|e| {
+                Error::new(
+                    "Deserializing JSON into ResponseData",
+                    ErrorKind::Reqwest(e),
+                )
+            });
 
         QueryClient::backoff::<R>(&result).await;
         result

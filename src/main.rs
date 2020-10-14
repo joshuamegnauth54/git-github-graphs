@@ -102,16 +102,25 @@ fn write_output(results: &Vec<Vec<RepoViewNode>>) {
         .collect();
 
     // I'm not sure what else to do beyond reporting the errors.
-    for repo_pair in files.iter().zip(results.iter()) {
-        match repo_pair.0 {
+    for (file_opt, nodes) in files.iter().zip(results.iter()) {
+        match file_opt {
             Ok(file) => {
-                if let Err(e) = write_nodes(file, &repo_pair.1) {
+                if let Err(e) = write_nodes(file, &nodes) {
                     error!("{}", e)
                 }
             }
             Err(e) => error!("{}", e),
         }
     }
+}
+
+async fn query_all(client: &QueryClient, queries: &Vec<QueryBody<repo_view::Variables>>) {
+    let futures: Vec<_> = queries
+        .iter()
+        .map(|query| query_to_end(&client, &query))
+        .collect();
+
+    select_all(futures).await
 }
 
 #[tokio::main]

@@ -6,6 +6,8 @@ use std::{
     io::Error as IoError,
 };
 
+use reqwest::Error as ReqwestError;
+
 #[derive(Debug)]
 pub struct Error {
     context: String,
@@ -35,13 +37,22 @@ impl Display for Error {
         match &self.errorkind {
             ErrorKind::BadArgs => write!(f, "Called with bad arguments: {}", self.context),
             ErrorKind::EmptyData => write!(f, "Unexpectedly empty data: {}", self.context),
-            ErrorKind::Io(io) => write!(f, "IO Error: {}. Context: {}", io, self.context),
+            ErrorKind::NoToken => write!(
+                f,
+                "The environmental variable GITHUB_API_TOKEN must contain your GitHub API \
+                token. Context: {}",
+                self.context
+            ),
+            ErrorKind::Io(io) => write!(f, "IO Error: {}\nContext: {}", io, self.context),
             ErrorKind::Json(json) => write!(
                 f,
                 "Serde JSON error: {:?}; Context: {context}",
                 json,
                 context = self.context()
             ),
+            ErrorKind::Reqwest(reqw) => {
+                write!(f, "Reqwest error: {}\nContext {}", reqw, self.context)
+            }
         }
     }
 }
@@ -59,5 +70,11 @@ impl From<JsonError> for Error {
 impl From<IoError> for Error {
     fn from(io: IoError) -> Self {
         Error::new("Empty context", ErrorKind::Io(io))
+    }
+}
+
+impl From<ReqwestError> for Error {
+    fn from(reqw: ReqwestError) -> Self {
+        Error::new("Empty context", ErrorKind::Reqwest(reqw))
     }
 }

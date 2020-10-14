@@ -1,6 +1,7 @@
 #[warn(clippy::all)]
 use super::{backoff_timer::BackoffTimer, cursor::Cursor};
-use crate::query_client::QueryClient;
+// Importing error::Result breaks #[derive(GraphQLQuery)] for some reason.
+use crate::{error::Result as GGGResult, query_client::QueryClient};
 use chrono::{offset::Utc, Duration as OldDuration};
 use graphql_client::{GraphQLQuery, QueryBody, Response};
 use log::{error, info, warn};
@@ -100,19 +101,23 @@ pub fn repoview_request<V: AsRef<str>>(
     })
 }
 
-// Fix error handling later
+/// Executes the GraphQL Query defined in queries/repoquery.graphql on the repository and variables defined in
+/// repo_request.
+/// Note that the query is only executed once.
 pub async fn query_github(
     client: &QueryClient,
     repo_request: &RepoQuery,
-) -> reqwest::Result<Response<repo_view::ResponseData>> {
+) -> GGGResult<Response<repo_view::ResponseData>> {
     Ok(client.request::<RepoQuery, RepoView>(&repo_request).await?)
 }
 
-// Make this generic later.
+// Make this generic later?
+/// Fully gathers the data requested by queries/repoquery.graphql on the repository defined in init
+/// until all data is gathered. The $cursor variable is automatically updated (i.e. paginated).
 pub async fn query_to_end(
     client: &QueryClient,
     init: &RepoQuery,
-) -> reqwest::Result<Vec<repo_view::ResponseData>> {
+) -> GGGResult<Vec<repo_view::ResponseData>> {
     // Holds raw responses to process elsewhere.
     let mut responses: Vec<repo_view::ResponseData> = Vec::new();
 
