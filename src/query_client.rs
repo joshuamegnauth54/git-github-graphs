@@ -36,7 +36,7 @@ impl QueryClient {
     pub async fn request<Q, R>(&self, query: &Q) -> Result<Response<R::ResponseData>>
     where
         Q: Serialize,
-        R: BackoffTimer<R> + GraphQLQuery + Send + Sync,
+        R: BackoffTimer<R> + GraphQLQuery + Send + Sync + Unpin,
     {
         // The block below queries the GitHub API using the associated token and query. I'm saving
         // the result into a variable to query R::backoff().
@@ -65,7 +65,7 @@ impl QueryClient {
     // Likewise, if the implementer returns None we simply use a default.
     async fn backoff<R>(response: &Result<Response<R::ResponseData>>)
     where
-        R: BackoffTimer<R> + GraphQLQuery + Send + Sync,
+        R: BackoffTimer<R> + GraphQLQuery + Send + Sync + Unpin,
     {
         match response {
             Ok(ref repdata) if repdata.data.is_some() => sleep(

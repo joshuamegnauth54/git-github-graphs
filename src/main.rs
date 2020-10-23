@@ -1,5 +1,5 @@
 #[warn(clippy::all)]
-use futures::future::select_all;
+use futures::future::join_all;
 use graphql_client::QueryBody;
 use log::{error, info};
 use std::{
@@ -114,13 +114,16 @@ fn write_output(results: &Vec<Vec<RepoViewNode>>) {
     }
 }
 
-async fn query_all(client: &QueryClient, queries: &Vec<QueryBody<repo_view::Variables>>) {
+/// Convenience function to run all queries then return the results.
+async fn query_all(
+    client: &QueryClient,
+    queries: &Vec<QueryBody<repo_view::Variables>>,
+) -> Vec<Result<Vec<repo_view::ResponseData>>> {
     let futures: Vec<_> = queries
         .iter()
         .map(|query| query_to_end(&client, &query))
         .collect();
-
-    select_all(futures).await
+    join_all(futures).await
 }
 
 #[tokio::main]
@@ -131,14 +134,23 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sy
     let requests = make_requests()?;
     let client = QueryClient::new()?;
     info!("Beginning scrape.");
-    // Test
-    let response = query_to_end(&client, requests.iter().next().unwrap()).await?;
-    //println!("{:#?}", response);
+    let (responses_nested, errors) = query_all(&client, &requests)
+        .await
+        .into_iter()
+        .partition::<Vec<_>, _>(Result::is_ok);
 
-    let nodes_test = RepoViewNode::parse_nodes(&response);
-    println!("{:#?}", nodes_test);
+    for error in errors {
+        // Partitioned into ok/err so we can unwrap the error here.
+        error!("Error returned during query phase: {}", error.unwrap_err());
+    }
+
+    info!("Parsing nodes.");
+    let responses = responses_nested.into_iter().flatten().flatten().collect();
+    //info!("Size: {}", responses.len());
+    let parsed_data = RepoViewNode::parse_nodes(&responses);
     info!("Writing files.");
-    write_output(&vec![nodes_test]);
+    // I think I flattened everything too much?
+    write_output(&vec![parsed_data]);
 
     Ok(())
 }
