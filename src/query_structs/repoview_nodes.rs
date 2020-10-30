@@ -1,5 +1,4 @@
 use super::repoview::*;
-#[warn(clippy::all)]
 //use crate::error::{Error, Result};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -20,18 +19,16 @@ impl RepoViewNode {
     fn organizations_to_vec(
         orgs: &repo_view::RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdgesNodeOrganizations,
     ) -> Option<Vec<String>> {
-        orgs.nodes.as_ref().and_then(|nodes_iter| {
-            Some(
-                nodes_iter
-                    .iter()
-                    .map(|node_org| {
-                        node_org
-                            .as_ref()
-                            .and_then(|org| Some(org.login.clone()))
-                            .unwrap_or_else(|| String::from("NA"))
-                    })
-                    .collect(),
-            )
+        orgs.nodes.as_ref().map(|nodes_iter| {
+            nodes_iter
+                .iter()
+                .map(|node_org| {
+                    node_org
+                        .as_ref()
+                        .map(|org| org.login.clone())
+                        .unwrap_or_else(|| String::from("NA"))
+                })
+                .collect()
         })
     }
 
@@ -42,9 +39,9 @@ impl RepoViewNode {
     // Participants refers to posters on the specific pull request. So, we take in repository and
     // DateTime String slices as those don't change per poster.
     fn participants_to_nodes(
-        participants: &Vec<
-            Option<repo_view::RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdges>,
-        >,
+        participants: &[Option<
+            repo_view::RepoViewRepositoryPullRequestsEdgesNodeParticipantsEdges,
+        >],
         repo: &str,
         created_at: &str,
         title: &str,
@@ -56,8 +53,8 @@ impl RepoViewNode {
                 part_edges_opt.as_ref().and_then(|part_edges| {
                     // ParticipantsEdgesNode
                     // Constructs individual RepoViewNodes that are collected into a Vector.
-                    part_edges.node.as_ref().and_then(|user| {
-                        Some(RepoViewNode {
+                    part_edges.node.as_ref().map(|user| {
+                        RepoViewNode {
                             repository: repo.to_owned(),
                             author: user.login.to_owned(),
                             date_created: created_at.to_owned(),
@@ -73,8 +70,8 @@ impl RepoViewNode {
                                 .as_ref()
                                 .map_or_else(|| String::from("NA"), |company| company.clone()),
                             organizations: RepoViewNode::organizations_to_vec(&user.organizations)
-                                .unwrap_or_else(|| Vec::new()),
-                        }) //End of RepoViewNode construction
+                                .unwrap_or_else(Vec::new),
+                        } //End of RepoViewNode construction
                     }) // End of ParticipantsEdgesNode
                 }) // End of individual ParticipantsEdges
             })
@@ -84,7 +81,7 @@ impl RepoViewNode {
     // Traverses the pull requests to build Vectors of RepoViewNodes. The Vectors are constructed
     // from Vectors of Vectors of RepoViewNodes.
     fn pull_reqs_vec(
-        pr_edges_vec: &Vec<Option<repo_view::RepoViewRepositoryPullRequestsEdges>>,
+        pr_edges_vec: &[Option<repo_view::RepoViewRepositoryPullRequestsEdges>],
         repo: &str,
     ) -> Vec<RepoViewNode> {
         // RepoViewRepositoryPullRequestsEdges iterator
@@ -101,13 +98,13 @@ impl RepoViewNode {
                             .participants
                             .edges
                             .as_ref()
-                            .and_then(|part_edges_iter| {
-                                Some(RepoViewNode::participants_to_nodes(
+                            .map(|part_edges_iter| {
+                                RepoViewNode::participants_to_nodes(
                                     &part_edges_iter,
                                     repo,
                                     &pr_edges_node.created_at,
                                     &pr_edges_node.title,
-                                ))
+                                )
                             }) // End of ParticipantsEdges iter
                     }) // End of RepoViewRepositoryPullRequestsEdgesNode
                 }) // End of RepoViewRepositoryPullRequestsEdges
@@ -121,7 +118,7 @@ impl RepoViewNode {
             .collect()
     }
 
-    pub fn parse_nodes(data: &Vec<repo_view::ResponseData>) -> Vec<RepoViewNode> {
+    pub fn parse_nodes(data: &[repo_view::ResponseData]) -> Vec<RepoViewNode> {
         let mut parsed: Vec<RepoViewNode> = Vec::new();
 
         for unparsed in data.iter() {
@@ -130,8 +127,8 @@ impl RepoViewNode {
                 Some(ref repo) => {
                     let maybe_reponodes: Option<Vec<RepoViewNode>> =
                     // RepoViewRepositoryPullRequests (and Option<[...]Edges>)
-                    repo.pull_requests.edges.as_ref().and_then(|pr_edges_vec| {
-                        Some(RepoViewNode::pull_reqs_vec(&pr_edges_vec, &repo.name_with_owner))
+                    repo.pull_requests.edges.as_ref().map(|pr_edges_vec| {
+                        RepoViewNode::pull_reqs_vec(&pr_edges_vec, &repo.name_with_owner)
                     }); // End of RepoViewRepositoryPullRequests
                     if let Some(reponodes) = maybe_reponodes {
                         parsed.extend(reponodes);

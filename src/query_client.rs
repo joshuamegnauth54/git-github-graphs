@@ -1,4 +1,3 @@
-#[warn(clippy::all)]
 use graphql_client::{GraphQLQuery, Response};
 use reqwest::Client;
 use serde::Serialize;
@@ -70,7 +69,7 @@ impl QueryClient {
         match response {
             Ok(ref repdata) if repdata.data.is_some() => sleep(
                 R::backoff(&repdata.data.as_ref().unwrap())
-                    .unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT)),
+                    .unwrap_or_else(|| Duration::from_secs(DEFAULT_TIMEOUT)),
             ),
             _ => sleep(Duration::from_secs(DEFAULT_TIMEOUT)),
         }

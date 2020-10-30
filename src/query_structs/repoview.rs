@@ -1,4 +1,3 @@
-#[warn(clippy::all)]
 use super::{backoff_timer::BackoffTimer, cursor::Cursor};
 // Importing error::Result breaks #[derive(GraphQLQuery)] for some reason.
 use crate::{error::Result as GGGResult, query_client::QueryClient};
@@ -38,9 +37,10 @@ impl Cursor<RepoView> for RepoView {
                 .edges
                 .as_ref()
                 .and_then(|edges_vec| {
-                    edges_vec.iter().last().and_then(|vec_last| {
-                        vec_last.as_ref().and_then(|edge| Some(edge.cursor.clone()))
-                    })
+                    edges_vec
+                        .iter()
+                        .last()
+                        .and_then(|vec_last| vec_last.as_ref().map(|edge| edge.cursor.clone()))
                 }),
             _ => None,
         }

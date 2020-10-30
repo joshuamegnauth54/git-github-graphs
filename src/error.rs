@@ -1,7 +1,7 @@
 pub use super::errorkind::ErrorKind;
 use serde_json::Error as JsonError;
-#[warn(clippy::all)]
 use std::{
+    backtrace::Backtrace,
     fmt::{Display, Formatter},
     io::Error as IoError,
 };
@@ -10,6 +10,7 @@ use reqwest::Error as ReqwestError;
 
 #[derive(Debug)]
 pub struct Error {
+    backtrace: Backtrace,
     context: String,
     errorkind: ErrorKind,
 }
@@ -22,6 +23,7 @@ impl Error {
         T: AsRef<str>,
     {
         Error {
+            backtrace: Backtrace::capture(),
             context: context.as_ref().to_owned(),
             errorkind,
         }

@@ -1,4 +1,3 @@
-#[warn(clippy::all)]
 use graphql_client::GraphQLQuery;
 use std::time::Duration;
 

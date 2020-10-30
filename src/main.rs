@@ -1,4 +1,4 @@
-#[warn(clippy::all)]
+#![feature(backtrace)]
 use futures::future::join_all;
 use graphql_client::QueryBody;
 use log::{error, info};
@@ -65,7 +65,7 @@ fn make_requests() -> Result<Vec<QueryBody<repo_view::Variables>>> {
         .collect())
 }
 
-fn write_output(results: &Vec<Vec<RepoViewNode>>) {
+fn write_output(results: &[Vec<RepoViewNode>]) {
     // Open a set of output files with the paths output/owner/repo.json.
     // We'll attempt to write the data regardless of any errors rather than simply failing.
     let files: Vec<Result<File>> = results
@@ -117,7 +117,7 @@ fn write_output(results: &Vec<Vec<RepoViewNode>>) {
 /// Convenience function to run all queries then return the results.
 async fn query_all(
     client: &QueryClient,
-    queries: &Vec<QueryBody<repo_view::Variables>>,
+    queries: &[QueryBody<repo_view::Variables>],
 ) -> Vec<Result<Vec<repo_view::ResponseData>>> {
     let futures: Vec<_> = queries
         .iter()
@@ -145,7 +145,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sy
     }
 
     info!("Parsing nodes.");
-    let responses = responses_nested.into_iter().flatten().flatten().collect();
+    let responses: Vec<_> = responses_nested.into_iter().flatten().flatten().collect();
     //info!("Size: {}", responses.len());
     let parsed_data = RepoViewNode::parse_nodes(&responses);
     info!("Writing files.");

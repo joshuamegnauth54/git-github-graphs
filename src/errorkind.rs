@@ -1,5 +1,4 @@
 use reqwest::Error as ReqwestError;
-#[warn(clippy::all)]
 use serde_json::Error as JsonError;
 use std::io::Error as IoError;
 
