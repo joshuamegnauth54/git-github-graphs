@@ -20,7 +20,7 @@ type RepoQuery = QueryBody<repo_view::Variables>;
 const SLEEP_MINUTES: i64 = 15;
 const SLEEP_SEC: u64 = 900;
 
-#[derive(GraphQLQuery)]
+#[derive(GraphQLQuery, Clone)]
 #[graphql(
     schema_path = "queries/ghschema.graphql",
     query_path = "queries/repoquery.graphql",
@@ -124,12 +124,17 @@ pub async fn query_to_end(
     // Cloning the query itself didn't seem to work as the object remained "behind an immutable
     // reference" for whatever reason. I assume the Clone trait isn't derived on
     // GraphQLQuery::Variables or whatever? Either way, manually cloning for now.
-    let mut query = repoview_request(
-        init.variables.owner.clone(),
-        init.variables.name.clone(),
-        init.variables.nnodes,
-        init.variables.pullcursor.clone(),
-    );
+    let mut query = RepoQuery {
+        variables: repo_view::Variables {
+            owner: init.variables.owner.clone(),
+            name: init.variables.name.clone(),
+            nnodes: init.variables.nnodes,
+            pullcursor: init.variables.pullcursor.clone(),
+        },
+        query: init.query,
+        operation_name: init.operation_name,
+    };
+
     info!(
         "Scraping from {}/{}",
         query.variables.owner, query.variables.name

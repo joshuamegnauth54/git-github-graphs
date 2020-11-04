@@ -65,53 +65,9 @@ fn make_requests() -> Result<Vec<QueryBody<repo_view::Variables>>> {
         .collect())
 }
 
-fn write_output(results: &[Vec<RepoViewNode>]) {
-    // Open a set of output files with the paths output/owner/repo.json.
-    // We'll attempt to write the data regardless of any errors rather than simply failing.
-    let files: Vec<Result<File>> = results
-        .iter()
-        .map(|nodes| {
-            nodes
-                .iter()
-                // Peek to look at the first node to get the repository name.
-                .peekable()
-                .peek()
-                // Report if the Vector is empty then continue.
-                .ok_or_else(|| {
-                    Error::new(
-                        "Empty input data while writing output JSON.",
-                        ErrorKind::EmptyData,
-                    )
-                })
-                .and_then(|node| {
-                    // Paths are a zero cost conversion so we need a variable.
-                    let temp_path = format!("output/{}.json", &node.repository);
-                    let repo_path = Path::new(&temp_path);
-                    // Create the full directory path if required or return an error with the
-                    // failed path.
-                    create_dir_all(&repo_path.parent().ok_or_else(|| {
-                        // Manually convert NoneError into an Error.
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            repo_path.to_str().unwrap_or_else(|| "").to_owned(),
-                        )
-                    })?)?;
-                    Ok(File::create(&repo_path)?)
-                })
-        })
-        .collect();
-
-    // I'm not sure what else to do beyond reporting the errors.
-    for (file_opt, nodes) in files.iter().zip(results.iter()) {
-        match file_opt {
-            Ok(file) => {
-                if let Err(e) = write_nodes(file, &nodes) {
-                    error!("{}", e)
-                }
-            }
-            Err(e) => error!("{}", e),
-        }
-    }
+fn write_output<P: AsRef<Path>>(results: &[RepoViewNode], path: P) -> Result<()> {
+    let file = File::create(&path)?;
+    Ok(write_nodes(file, &results)?)
 }
 
 /// Convenience function to run all queries then return the results.
@@ -127,11 +83,18 @@ async fn query_all(
 }
 
 #[tokio::main]
-async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<()> {
     let _log =
         pretty_env_logger::try_init().map_err(|e| eprintln!("Failed to initialize logger: {}", e));
 
-    let requests = make_requests()?;
+    let requests = match make_requests() {
+        Ok(req) => req,
+        Err(e) /*if e.errorkind == ErrorKind::BadArgs =>*/ => {
+            eprintln!("You must provide repositories in the form owner/repo (ex. joshuamegnauth54/cat_tracker).");
+            return Err(e)
+        }
+    };
+
     let client = QueryClient::new()?;
     info!("Beginning scrape.");
     let (responses_nested, errors) = query_all(&client, &requests)
@@ -149,8 +112,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sy
     //info!("Size: {}", responses.len());
     let parsed_data = RepoViewNode::parse_nodes(&responses);
     info!("Writing files.");
-    // I think I flattened everything too much?
-    write_output(&vec![parsed_data]);
+    write_output(&parsed_data, "output/output.json")?;
 
     Ok(())
 }
