@@ -1,12 +1,7 @@
 #![feature(backtrace)]
-use futures::future::join_all;
 use graphql_client::QueryBody;
 use log::{error, info};
-use std::{
-    env::args,
-    fs::{create_dir_all, File},
-    path::Path,
-};
+use std::{env::args, fs::File, path::Path};
 
 mod error;
 mod errorkind;
@@ -75,11 +70,13 @@ async fn query_all(
     client: &QueryClient,
     queries: &[QueryBody<repo_view::Variables>],
 ) -> Vec<Result<Vec<repo_view::ResponseData>>> {
-    let futures: Vec<_> = queries
-        .iter()
-        .map(|query| query_to_end(&client, &query))
-        .collect();
-    join_all(futures).await
+    let mut results: Vec<_> = Vec::new();
+    // I have to run these synchronously or else GitHub yells at me.
+    for query in queries.iter() {
+        results.push(query_to_end(&client, &query).await);
+    }
+
+    results
 }
 
 #[tokio::main]
@@ -90,12 +87,20 @@ async fn main() -> Result<()> {
     let requests = match make_requests() {
         Ok(req) => req,
         Err(e) /*if e.errorkind == ErrorKind::BadArgs =>*/ => {
-            eprintln!("You must provide repositories in the form owner/repo (ex. joshuamegnauth54/cat_tracker).");
+            error!("You must provide repositories in the form owner/repo (ex. joshuamegnauth54/cat_tracker).");
             return Err(e)
         }
     };
 
-    let client = QueryClient::new()?;
+    let client = match QueryClient::new() {
+        Ok(qc) => qc,
+        Err(e) /*if e.errorkind == ErrorKind::NoToken*/ => {
+            error!("Error! Do you have your token in the environmental variable GITHUB_API_TOKEN?");
+            return Err(e)
+        }
+
+    };
+
     info!("Beginning scrape.");
     let (responses_nested, errors) = query_all(&client, &requests)
         .await

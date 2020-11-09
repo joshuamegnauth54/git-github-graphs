@@ -140,8 +140,20 @@ pub async fn query_to_end(
         query.variables.owner, query.variables.name
     );
     // Handle this better later...must submit assignment.
-    loop {
+    'scrape: loop {
         let last_resp = query_github(&client, &query).await?;
+
+        // I've run into problems where GitHub sent empty data as well as no errors.
+        // The scraper continued to run without ever making progress. Let's just stop scraping
+        // in this case.
+        if last_resp.data.is_none() && last_resp.errors.is_none() {
+            warn!(
+                "Empty data returned from {}/{}",
+                query.variables.owner, query.variables.name
+            );
+            break 'scrape;
+        }
+
         if let Some(data) = last_resp.data {
             // No cursor = no more data
             if let Some(cursor_s) = RepoView::cursor(&data) {
@@ -151,7 +163,7 @@ pub async fn query_to_end(
                 responses.push(data);
             } else {
                 responses.push(data);
-                break;
+                break 'scrape;
             }
         }
 
